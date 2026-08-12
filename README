@@ -1,4 +1,5 @@
 # Range Timer
+https://heavilysauced.github.io/shooting-timer/
 
 A self-contained, offline-capable shot timer for practical/competitive shooting practice. No backend, no external libraries, no analytics — everything runs in the browser.
 
