@@ -1,0 +1,14 @@
+{
+  "name": "Range Timer — Offline Shot Timer",
+  "short_name": "RangeTimer",
+  "description": "An offline-capable shot timer with randomized start delay, automatic microphone shot detection, and split-time ledger.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#14140f",
+  "theme_color": "#14140f",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
