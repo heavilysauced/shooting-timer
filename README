@@ -1,0 +1,50 @@
+# Range Timer
+
+A self-contained, offline-capable shot timer for practical/competitive shooting practice. No backend, no external libraries, no analytics — everything runs in the browser.
+
+## Features
+
+- **Randomized start delay** (adjustable min/max) before the start beep, so you can't anticipate the go signal
+- **Automatic shot detection** via the device microphone (Web Audio API) — no need to tap anything mid-string
+- **Manual mode** fallback if you'd rather log shots by tapping the buzzer or pressing spacebar (also used automatically if microphone access is denied)
+- **Split-time ledger** showing each shot's split and cumulative time
+- **Par time** — optional second beep at a target time
+- **Auto-stop after silence**, or stop manually
+- **String history** saved locally on your device (`localStorage`) — nothing is ever uploaded anywhere
+- **Installable as an app** (PWA) and works with **no internet connection** after the first load
+
+## Try it locally
+
+Just open `index.html` in any modern browser (Chrome, Safari, Firefox, Edge). Microphone-based detection requires either `localhost` or HTTPS — opening the file directly (`file://`) will still work, but the browser may block mic access, in which case the app automatically falls back to manual mode.
+
+## Deploy to GitHub Pages
+
+1. Create a new GitHub repository and push these files (`index.html`, `manifest.json`, `sw.js`, `icon.svg`, `README.md`) to the root of the `main` branch.
+2. In the repo, go to **Settings → Pages**.
+3. Under **Build and deployment**, set **Source** to `Deploy from a branch`, branch `main`, folder `/ (root)`.
+4. Save. GitHub will publish the site at `https://<your-username>.github.io/<repo-name>/`.
+5. Visit that URL once while online. This lets the service worker cache the app and lets your browser remember the microphone permission.
+6. After that first visit, the app will keep working with **no network connection at all** — you can even turn on airplane mode. On mobile, use your browser's "Add to Home Screen" option to install it like a native app.
+
+## Using it at the range
+
+1. Tap **Settings (⚙)** to set your delay range, mic sensitivity, and optional par time.
+2. Tap **START**. The screen will say "Get ready…" during the random delay, then you'll hear the beep.
+3. Fire your string — shots are detected automatically and logged with split times. If mic detection is unreliable (windy conditions, echoey indoor range), turn on **Manual mode** and tap the buzzer (or press spacebar) each time you fire instead.
+4. Tap **STOP** (or wait for auto-stop after a few seconds of silence) to end the string.
+5. Review splits in the ledger, or check **History (☰)** for past strings.
+
+### Tuning mic sensitivity
+
+If it's missing shots, increase sensitivity. If it's picking up ambient range noise or your own beep as a "shot," decrease sensitivity — the app already ignores audio during the beep itself and requires ~130ms between detections to avoid double-counting a single shot's report.
+
+## Why it works offline
+
+The entire app is one HTML file with inline CSS/JS — there are no CDN fonts, icon packs, or API calls. `sw.js` (a service worker) caches all four files on first load so subsequent visits, even fully offline, are served from the local cache. Shot history is stored in `localStorage`, which also persists offline.
+
+## Files
+
+- `index.html` — the app
+- `manifest.json` — PWA metadata (name, icon, theme color) for "Add to Home Screen"
+- `sw.js` — service worker that caches the app for offline use
+- `icon.svg` — app icon
