@@ -19,6 +19,7 @@
     --lcd-dim:#3d3421;
     --red:#a83c2c;
     --red-bright:#d5563d;
+    --cursor:#cfd8e6;
     --ink:#e9e4d6;
     --muted:#8d8a76;
     --line:#2f321f;
@@ -70,6 +71,29 @@
     text-align:right;
     line-height:1.5;
   }
+
+  /* ---------- Spectrum screen header ---------- */
+  .spec-header{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:2px 0 14px;
+    border-bottom:1px solid var(--line);
+    margin-bottom:16px;
+  }
+  .spec-header h1{
+    flex:1;
+    text-align:center;
+    font-family:var(--cond);
+    font-stretch:condensed;
+    text-transform:uppercase;
+    letter-spacing:.14em;
+    font-size:19px;
+    font-weight:800;
+    color:var(--brass-bright);
+    margin:0;
+  }
+  .spec-header .spacer{ width:44px; flex:none; }
 
   /* ---------- Status row ---------- */
   .status-row{
@@ -295,6 +319,20 @@
   .mic-state.ok{ color:#7fae5f; }
   .mic-state.bad{ color:var(--red-bright); }
 
+  .nav-row{
+    display:flex; align-items:center; justify-content:space-between;
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:12px 14px;
+    cursor:pointer;
+    margin-top:4px;
+  }
+  .nav-row:hover{ border-color:var(--brass); }
+  .nav-row .t{ font-size:12.5px; letter-spacing:.04em; color:var(--ink); }
+  .nav-row .d{ font-size:10.5px; color:var(--muted); margin-top:2px; }
+  .nav-row .arrow{ color:var(--brass-bright); font-size:16px; }
+
   /* ---------- Spectrum / detection panel ---------- */
   .spectrum-wrap{
     background:var(--bezel);
@@ -305,7 +343,7 @@
   }
   #spectrumCanvas{
     width:100%;
-    height:150px;
+    height:240px;
     display:block;
     border-radius:4px;
     cursor:crosshair;
@@ -314,23 +352,39 @@
   .spectrum-readout{
     display:flex;
     justify-content:space-between;
+    gap:8px;
     font-size:10px;
     letter-spacing:.05em;
     color:var(--muted);
     margin-top:6px;
     padding:0 2px;
+    flex-wrap:wrap;
   }
   .spectrum-readout .peak{ color:var(--ink); transition:color .1s; }
   .spectrum-readout .peak.trig{ color:var(--red-bright); }
+  .spectrum-readout .cur{ color:var(--cursor); }
   .spectrum-hint{
     font-size:10px;
     color:#5c5a4d;
     letter-spacing:.03em;
-    margin:6px 2px 14px;
+    margin:10px 2px 14px;
     line-height:1.5;
   }
   .hz-row{ display:flex; gap:10px; }
   .hz-row .field{ flex:1; }
+  .legend{
+    display:flex; gap:14px; flex-wrap:wrap;
+    font-size:9.5px; color:var(--muted); letter-spacing:.04em;
+    margin:8px 2px 0;
+  }
+  .legend span{ display:flex; align-items:center; gap:5px; }
+  .legend i{ width:12px; height:2px; display:inline-block; border-radius:1px; }
+  .clear-btn{
+    background:none; border:1px solid var(--line); color:var(--muted);
+    font-family:var(--mono); font-size:11px; letter-spacing:.06em;
+    padding:7px 10px; border-radius:6px; cursor:pointer; margin-top:10px;
+  }
+  .clear-btn:hover{ color:var(--brass-bright); border-color:var(--brass); }
 
   .history-row{
     display:flex; justify-content:space-between; align-items:center;
@@ -339,12 +393,6 @@
   }
   .history-row:last-child{ border-bottom:none; }
   .history-row .meta{ color:var(--muted); }
-  .clear-btn{
-    background:none; border:1px solid var(--line); color:var(--muted);
-    font-family:var(--mono); font-size:11px; letter-spacing:.06em;
-    padding:7px 10px; border-radius:6px; cursor:pointer; margin-top:10px;
-  }
-  .clear-btn:hover{ color:var(--red-bright); border-color:var(--red-bright); }
 
   .foot{
     text-align:center; font-size:10px; letter-spacing:.08em;
@@ -361,7 +409,9 @@
 </style>
 </head>
 <body>
-<div class="rig">
+
+<!-- ============ MAIN SCREEN ============ -->
+<div class="rig" id="mainScreen">
 
   <div class="plate">
     <h1>Range Timer</h1>
@@ -422,37 +472,15 @@
       <div class="switch" id="manualSwitch"></div>
     </div>
 
-    <hr style="border:none; border-top:1px solid var(--line); margin:16px 0;">
-
-    <h2>Shot detection — spectrum</h2>
-    <div class="spectrum-wrap">
-      <canvas id="spectrumCanvas"></canvas>
-    </div>
-    <div class="spectrum-readout">
-      <span>Peak in band: <span class="peak" id="peakReadout">-- dB</span></span>
-      <span id="triggerReadout">—</span>
-    </div>
-    <div class="spectrum-hint">
-      Drag the red line to set the trigger level (dB). Drag the two amber handles to set the frequency band ("tone") a shot must fall in. Make some noise near the mic to calibrate — the readout flashes when a peak crosses the threshold.
-    </div>
-
     <div class="field">
-      <div class="field-label"><span>Trigger threshold</span><span class="val" id="thresholdVal">-30 dB</span></div>
-      <input type="range" id="thresholdSlider" min="-100" max="-10" step="1" value="-30">
-    </div>
-
-    <div class="hz-row">
-      <div class="field">
-        <div class="field-label"><span>Band low</span><span class="val" id="freqMinVal">1000 Hz</span></div>
-        <input type="range" id="freqMinSlider" min="60" max="12000" step="10" value="1000">
-      </div>
-      <div class="field">
-        <div class="field-label"><span>Band high</span><span class="val" id="freqMaxVal">8000 Hz</span></div>
-        <input type="range" id="freqMaxSlider" min="60" max="12000" step="10" value="8000">
+      <div class="nav-row" id="openSpectrumBtn">
+        <div>
+          <div class="t">Shot detection · Spectrum</div>
+          <div class="d">Set dB trigger &amp; frequency band</div>
+        </div>
+        <div class="arrow">›</div>
       </div>
     </div>
-
-    <div class="mic-state" id="micState">Microphone not yet requested.</div>
   </div>
 
   <div class="drawer" id="historyDrawer">
@@ -464,9 +492,67 @@
   <div class="foot">Runs fully offline · nothing leaves this device</div>
 </div>
 
+<!-- ============ SPECTRUM SCREEN ============ -->
+<div class="rig" id="spectrumScreen" style="display:none;">
+
+  <div class="spec-header">
+    <button class="side-btn" id="specBack" aria-label="Back">‹</button>
+    <h1>Spectrum</h1>
+    <div class="spacer"></div>
+  </div>
+
+  <div class="spectrum-wrap">
+    <canvas id="spectrumCanvas"></canvas>
+  </div>
+  <div class="legend">
+    <span><i style="background:#d5563d;"></i>Threshold (dB)</span>
+    <span><i style="background:#e0bb84;"></i>Band edges (Hz)</span>
+    <span><i style="background:#cfd8e6;"></i>Pitch cursor</span>
+    <span><i style="background:#6b6650;"></i>Peak hold</span>
+  </div>
+  <div class="spectrum-readout">
+    <span>Band peak: <span class="peak" id="peakReadout">-- dB</span></span>
+    <span>Cursor <span id="cursorFreqReadout">3000 Hz</span>: <span class="cur" id="cursorDbReadout">-- dB</span></span>
+    <span id="triggerReadout">—</span>
+  </div>
+  <div class="spectrum-hint">
+    Drag the red line to set the trigger level. Drag the two amber handles to set the frequency band a shot must fall in. Drag the pale vertical line to inspect a specific pitch. The faint grey trace behind the live spectrum holds each frequency's recent peak so you can see where the loudest energy has been landing.
+  </div>
+
+  <div class="field">
+    <div class="field-label"><span>Trigger threshold</span><span class="val" id="thresholdVal">-30 dB</span></div>
+    <input type="range" id="thresholdSlider" min="-100" max="-10" step="1" value="-30">
+  </div>
+
+  <div class="hz-row">
+    <div class="field">
+      <div class="field-label"><span>Band low</span><span class="val" id="freqMinVal">1000 Hz</span></div>
+      <input type="range" id="freqMinSlider" min="60" max="12000" step="10" value="1000">
+    </div>
+    <div class="field">
+      <div class="field-label"><span>Band high</span><span class="val" id="freqMaxVal">8000 Hz</span></div>
+      <input type="range" id="freqMaxSlider" min="60" max="12000" step="10" value="8000">
+    </div>
+  </div>
+
+  <div class="field">
+    <div class="field-label"><span>Pitch cursor</span><span class="val" id="cursorSliderVal">3000 Hz</span></div>
+    <input type="range" id="cursorSlider" min="60" max="12000" step="10" value="3000">
+  </div>
+
+  <button class="clear-btn" id="resetPeakHoldBtn">Reset peak hold</button>
+
+  <div class="mic-state" id="micState" style="margin-top:14px;">Microphone not yet requested.</div>
+</div>
+
 <script>
 (function(){
   "use strict";
+
+  // ---------- Screens ----------
+  const mainScreen = document.getElementById('mainScreen');
+  const spectrumScreen = document.getElementById('spectrumScreen');
+  let spectrumOpen = false;
 
   // ---------- Elements ----------
   const digitsEl = document.getElementById('digits');
@@ -482,6 +568,9 @@
   const historyDrawer = document.getElementById('historyDrawer');
   const historyList = document.getElementById('historyList');
   const clearHistoryBtn = document.getElementById('clearHistoryBtn');
+  const openSpectrumBtn = document.getElementById('openSpectrumBtn');
+  const specBack = document.getElementById('specBack');
+  const resetPeakHoldBtn = document.getElementById('resetPeakHoldBtn');
 
   const delayMinEl = document.getElementById('delayMin');
   const delayMaxEl = document.getElementById('delayMax');
@@ -498,12 +587,16 @@
   const ctx2d = canvas.getContext('2d');
   const peakReadout = document.getElementById('peakReadout');
   const triggerReadout = document.getElementById('triggerReadout');
+  const cursorFreqReadout = document.getElementById('cursorFreqReadout');
+  const cursorDbReadout = document.getElementById('cursorDbReadout');
   const thresholdSlider = document.getElementById('thresholdSlider');
   const thresholdVal = document.getElementById('thresholdVal');
   const freqMinSlider = document.getElementById('freqMinSlider');
   const freqMaxSlider = document.getElementById('freqMaxSlider');
   const freqMinVal = document.getElementById('freqMinVal');
   const freqMaxVal = document.getElementById('freqMaxVal');
+  const cursorSlider = document.getElementById('cursorSlider');
+  const cursorSliderVal = document.getElementById('cursorSliderVal');
 
   // ---------- State ----------
   let phase = 'idle'; // idle -> arming -> running -> finished
@@ -530,12 +623,17 @@
   // Detection (frequency-domain)
   const DB_MIN = -100, DB_MAX = -10;
   const FREQ_MIN_DISPLAY = 60, FREQ_MAX_DISPLAY = 12000;
+  const SPEC_H = 240;
+  const PEAK_HOLD_DELAY_MS = 700;
+  const PEAK_DECAY_DB_PER_SEC = 12;
   let thresholdDb = -30;
   let freqMin = 1000, freqMax = 8000;
+  let cursorFreq = 3000;
   let bandPeakDb = DB_MIN;
   let triggerFlashUntil = 0;
+  let peakHold = null, peakHoldTime = null;
 
-  let dragTarget = null; // 'threshold' | 'freqMin' | 'freqMax'
+  let dragTarget = null; // 'threshold' | 'freqMin' | 'freqMax' | 'cursor'
 
   const HISTORY_KEY = 'rangeTimerHistory';
 
@@ -630,14 +728,18 @@
   function resizeCanvas(){
     const dpr = window.devicePixelRatio || 1;
     const rect = canvas.getBoundingClientRect();
-    canvas.width = Math.max(1, Math.round(rect.width*dpr));
-    canvas.height = Math.max(1, Math.round(150*dpr));
+    const w = Math.max(1, Math.round(rect.width));
+    canvas.width = Math.max(1, Math.round(w*dpr));
+    canvas.height = Math.max(1, Math.round(SPEC_H*dpr));
     ctx2d.setTransform(dpr,0,0,dpr,0,0);
+    peakHold = new Float32Array(w).fill(DB_MIN);
+    peakHoldTime = new Float32Array(w).fill(0);
   }
 
   function drawSpectrum(){
     const rect = canvas.getBoundingClientRect();
-    const w = rect.width, h = 150;
+    const w = Math.max(1, Math.round(rect.width)), h = SPEC_H;
+    if(!peakHold || peakHold.length !== w) resizeCanvas();
     ctx2d.clearRect(0,0,w,h);
 
     // dB gridlines
@@ -656,11 +758,43 @@
     ctx2d.fillStyle = 'rgba(184,146,90,0.14)';
     ctx2d.fillRect(xLo, 0, xHi-xLo, h);
 
-    // spectrum bars
+    const now = performance.now();
+    const dt = 16.7; // approx ms per frame, used for peak-hold decay
+
     if(freqData && analyser){
       const sr = audioCtx.sampleRate;
       const nyquist = sr/2;
       const binCount = analyser.frequencyBinCount;
+      const decayPerFrame = PEAK_DECAY_DB_PER_SEC * (dt/1000);
+
+      // update peak-hold buffer for every column
+      for(let x=0; x<w; x++){
+        const f = xToFreq(x,w);
+        const bin = clamp(Math.round(f/nyquist*binCount), 0, binCount-1);
+        const db = freqData[bin];
+        if(db > peakHold[x]){
+          peakHold[x] = db;
+          peakHoldTime[x] = now;
+        } else if(now - peakHoldTime[x] > PEAK_HOLD_DELAY_MS){
+          peakHold[x] = Math.max(DB_MIN, peakHold[x] - decayPerFrame);
+        }
+      }
+
+      // draw faint peak-hold silhouette behind the live spectrum
+      ctx2d.beginPath();
+      ctx2d.moveTo(0, dbToY(peakHold[0], h));
+      for(let x=1; x<w; x++){ ctx2d.lineTo(x, dbToY(peakHold[x], h)); }
+      ctx2d.lineTo(w, h); ctx2d.lineTo(0, h); ctx2d.closePath();
+      ctx2d.fillStyle = 'rgba(107,102,80,0.22)';
+      ctx2d.fill();
+      ctx2d.beginPath();
+      ctx2d.moveTo(0, dbToY(peakHold[0], h));
+      for(let x=1; x<w; x++){ ctx2d.lineTo(x, dbToY(peakHold[x], h)); }
+      ctx2d.strokeStyle = 'rgba(180,175,150,0.4)';
+      ctx2d.lineWidth = 1;
+      ctx2d.stroke();
+
+      // live spectrum bars
       ctx2d.fillStyle = '#ffb020';
       for(let x=0; x<w; x++){
         const f = xToFreq(x,w);
@@ -684,7 +818,7 @@
 
     // threshold line
     const ty = dbToY(thresholdDb,h);
-    const flashing = performance.now() < triggerFlashUntil;
+    const flashing = now < triggerFlashUntil;
     ctx2d.strokeStyle = flashing ? '#ff8a6e' : '#d5563d';
     ctx2d.lineWidth = flashing ? 2.5 : 1.5;
     ctx2d.setLineDash([4,3]);
@@ -700,9 +834,19 @@
       ctx2d.fill();
     });
 
-    // live peak marker in band
+    // pitch cursor line
+    const cx = freqToX(cursorFreq,w);
+    ctx2d.strokeStyle = '#cfd8e6';
+    ctx2d.lineWidth = 1.25;
+    ctx2d.beginPath(); ctx2d.moveTo(cx,0); ctx2d.lineTo(cx,h); ctx2d.stroke();
+    ctx2d.fillStyle = '#cfd8e6';
+    ctx2d.beginPath();
+    ctx2d.arc(cx, 8, 4, 0, Math.PI*2);
+    ctx2d.fill();
+
+    // live peak-in-band marker
     if(freqData){
-      const px = clamp((freqToX(freqMin,w)+freqToX(freqMax,w))/2, 0, w);
+      const px = clamp((xLo+xHi)/2, 0, w);
       ctx2d.fillStyle = flashing ? '#ff8a6e' : '#ffe6c0';
       ctx2d.beginPath();
       ctx2d.arc(px, dbToY(bandPeakDb,h), flashing?4:2.5, 0, Math.PI*2);
@@ -713,14 +857,15 @@
   // ---------- Pointer interaction on spectrum ----------
   function pointerToLocal(e){
     const rect = canvas.getBoundingClientRect();
-    return { x:(e.clientX-rect.left), y:(e.clientY-rect.top), w:rect.width, h:150 };
+    return { x:(e.clientX-rect.left), y:(e.clientY-rect.top), w:rect.width, h:SPEC_H };
   }
   canvas.addEventListener('pointerdown', (e)=>{
     const {x,y,w,h} = pointerToLocal(e);
-    const xLo = freqToX(freqMin,w), xHi = freqToX(freqMax,w);
+    const xLo = freqToX(freqMin,w), xHi = freqToX(freqMax,w), xCur = freqToX(cursorFreq,w);
     const ty = dbToY(thresholdDb,h);
     if(Math.abs(x-xLo) < 14){ dragTarget='freqMin'; }
     else if(Math.abs(x-xHi) < 14){ dragTarget='freqMax'; }
+    else if(Math.abs(x-xCur) < 14){ dragTarget='cursor'; }
     else if(Math.abs(y-ty) < 12){ dragTarget='threshold'; }
     else { dragTarget = null; return; }
     canvas.setPointerCapture(e.pointerId);
@@ -741,9 +886,13 @@
       freqMax = Math.round(clamp(xToFreq(x,w), freqMin+50, FREQ_MAX_DISPLAY));
       freqMaxSlider.value = freqMax;
       freqMaxVal.textContent = freqMax+' Hz';
+    } else if(dragTarget==='cursor'){
+      cursorFreq = Math.round(clamp(xToFreq(x,w), FREQ_MIN_DISPLAY, FREQ_MAX_DISPLAY));
+      cursorSlider.value = cursorFreq;
+      cursorSliderVal.textContent = cursorFreq+' Hz';
     }
   });
-  function endDrag(e){ dragTarget=null; };
+  function endDrag(){ dragTarget=null; }
   canvas.addEventListener('pointerup', endDrag);
   canvas.addEventListener('pointercancel', endDrag);
 
@@ -760,6 +909,13 @@
     freqMax = Math.max(parseFloat(freqMaxSlider.value), freqMin+50);
     freqMaxSlider.value = freqMax;
     freqMaxVal.textContent = freqMax+' Hz';
+  });
+  cursorSlider.addEventListener('input', ()=>{
+    cursorFreq = parseFloat(cursorSlider.value);
+    cursorSliderVal.textContent = cursorFreq+' Hz';
+  });
+  resetPeakHoldBtn.addEventListener('click', ()=>{
+    if(peakHold){ peakHold.fill(DB_MIN); peakHoldTime.fill(0); }
   });
 
   // ---------- Unified monitor loop: draws spectrum + does shot detection ----------
@@ -783,9 +939,12 @@
       registerShot(now);
     }
 
-    if(settingsDrawer.classList.contains('open')){
+    if(spectrumOpen){
+      const cursorBin = clamp(Math.round(cursorFreq/nyquist*binCount), 0, binCount-1);
       peakReadout.textContent = bandPeakDb.toFixed(0)+' dB';
       peakReadout.classList.toggle('trig', now < triggerFlashUntil);
+      cursorFreqReadout.textContent = cursorFreq+' Hz';
+      cursorDbReadout.textContent = freqData[cursorBin].toFixed(0)+' dB';
       triggerReadout.textContent = (now < triggerFlashUntil) ? 'TRIGGERED' : (phase==='running' ? 'armed' : 'monitoring');
       drawSpectrum();
     }
@@ -794,16 +953,34 @@
   }
 
   function checkMonitorState(){
-    const shouldRun = !!analyser && (phase==='running' || settingsDrawer.classList.contains('open'));
+    const shouldRun = !!analyser && (phase==='running' || spectrumOpen);
     if(shouldRun && monitorRafId===null){
       monitorRafId = requestAnimationFrame(monitorFrame);
-    } else if(shouldRun && monitorRafId!==null){
-      // already scheduled
     } else if(!shouldRun && monitorRafId!==null){
       cancelAnimationFrame(monitorRafId);
       monitorRafId = null;
     }
   }
+
+  // ---------- Screen navigation ----------
+  function openSpectrumScreen(){
+    settingsDrawer.classList.remove('open');
+    mainScreen.style.display = 'none';
+    spectrumScreen.style.display = 'block';
+    spectrumOpen = true;
+    resizeCanvas();
+    if(!manualMode) ensureMic();
+    checkMonitorState();
+  }
+  function closeSpectrumScreen(){
+    spectrumScreen.style.display = 'none';
+    mainScreen.style.display = 'block';
+    spectrumOpen = false;
+    checkMonitorState();
+  }
+  openSpectrumBtn.addEventListener('click', openSpectrumScreen);
+  specBack.addEventListener('click', closeSpectrumScreen);
+  window.addEventListener('resize', ()=>{ if(spectrumOpen) resizeCanvas(); });
 
   // ---------- Timer flow ----------
   function updateSubline(){
@@ -939,6 +1116,7 @@
   buzzerBtn.addEventListener('click', handleBuzzerPress);
 
   document.addEventListener('keydown', (e)=>{
+    if(spectrumOpen) return; // don't hijack space/keys while adjusting spectrum controls
     if(e.code==='Space'){
       e.preventDefault();
       handleBuzzerPress();
@@ -978,25 +1156,14 @@
   });
 
   settingsBtn.addEventListener('click', ()=>{
-    const opening = !settingsDrawer.classList.contains('open');
-    settingsDrawer.classList.toggle('open', opening);
+    settingsDrawer.classList.toggle('open');
     historyDrawer.classList.remove('open');
-    if(opening){
-      resizeCanvas();
-      if(!manualMode) ensureMic();
-      checkMonitorState();
-    } else {
-      checkMonitorState();
-    }
   });
   historyBtn.addEventListener('click', ()=>{
     historyDrawer.classList.toggle('open');
     settingsDrawer.classList.remove('open');
-    checkMonitorState();
     renderHistory();
   });
-
-  window.addEventListener('resize', ()=>{ if(settingsDrawer.classList.contains('open')) resizeCanvas(); });
 
   // ---------- History ----------
   function loadHistory(){
@@ -1043,7 +1210,6 @@
   updateDelayLabel();
   renderLedger();
   updateSubline();
-  resizeCanvas();
 })();
 </script>
 </body>
