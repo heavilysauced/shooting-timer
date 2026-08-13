@@ -1,0 +1,1050 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#14140f">
+<title>Range Timer — Offline Shot Timer</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<style>
+  :root{
+    --bg:#14140f;
+    --panel:#1c1f16;
+    --panel-2:#23271a;
+    --bezel:#0e0f0a;
+    --brass:#b8925a;
+    --brass-bright:#e0bb84;
+    --lcd:#ffb020;
+    --lcd-dim:#3d3421;
+    --red:#a83c2c;
+    --red-bright:#d5563d;
+    --ink:#e9e4d6;
+    --muted:#8d8a76;
+    --line:#2f321f;
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", "Roboto Mono", Menlo, Consolas, monospace;
+    --cond: "Arial Narrow", "Segoe UI Semibold", sans-serif;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    background:
+      radial-gradient(1200px 800px at 50% -10%, #1e2116 0%, var(--bg) 55%),
+      repeating-linear-gradient(0deg, rgba(255,255,255,.012) 0px, rgba(255,255,255,.012) 1px, transparent 1px, transparent 3px);
+    color:var(--ink);
+    font-family:var(--mono);
+    min-height:100%;
+    display:flex;
+    justify-content:center;
+    padding:20px 14px 40px;
+  }
+  .rig{
+    width:100%;
+    max-width:480px;
+  }
+
+  /* ---------- Header plate ---------- */
+  .plate{
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    padding:2px 4px 14px;
+    border-bottom:1px solid var(--line);
+    margin-bottom:16px;
+  }
+  .plate h1{
+    font-family:var(--cond);
+    font-stretch:condensed;
+    text-transform:uppercase;
+    letter-spacing:.14em;
+    font-size:22px;
+    font-weight:800;
+    color:var(--brass-bright);
+    margin:0;
+  }
+  .plate .serial{
+    font-size:10px;
+    letter-spacing:.08em;
+    color:var(--muted);
+    text-align:right;
+    line-height:1.5;
+  }
+
+  /* ---------- Status row ---------- */
+  .status-row{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    margin-bottom:10px;
+    min-height:20px;
+  }
+  .status-dot{
+    width:9px;height:9px;border-radius:50%;
+    background:var(--lcd-dim);
+    box-shadow:none;
+    flex:none;
+    transition:background .15s, box-shadow .15s;
+  }
+  .status-dot.live{ background:var(--red-bright); box-shadow:0 0 8px 1px var(--red-bright); animation:pulse 1s infinite; }
+  .status-dot.ready{ background:#5f8f52; box-shadow:0 0 6px 1px #5f8f52; }
+  @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:.35;} }
+  .status-text{
+    font-size:11px;
+    letter-spacing:.16em;
+    text-transform:uppercase;
+    color:var(--muted);
+  }
+
+  /* ---------- LCD readout ---------- */
+  .readout{
+    background:var(--bezel);
+    border:1px solid #000;
+    border-radius:10px;
+    padding:22px 18px 18px;
+    box-shadow:
+      inset 0 2px 10px rgba(0,0,0,.7),
+      inset 0 0 0 1px rgba(255,255,255,.02),
+      0 1px 0 rgba(255,255,255,.03);
+    margin-bottom:14px;
+    position:relative;
+  }
+  .readout::before{
+    content:"";
+    position:absolute; inset:0;
+    border-radius:10px;
+    pointer-events:none;
+    background:repeating-linear-gradient(180deg, rgba(0,0,0,.15) 0px, rgba(0,0,0,.15) 1px, transparent 1px, transparent 3px);
+    opacity:.5;
+  }
+  .digits{
+    font-size:min(19vw, 84px);
+    font-weight:600;
+    text-align:center;
+    letter-spacing:.02em;
+    color:var(--lcd-dim);
+    line-height:1;
+    font-variant-numeric: tabular-nums;
+    text-shadow:none;
+    transition:color .1s, text-shadow .1s;
+    user-select:none;
+  }
+  .digits.on{
+    color:var(--lcd);
+    text-shadow:0 0 10px rgba(255,176,32,.55), 0 0 30px rgba(255,176,32,.18);
+  }
+  .subline{
+    display:flex;
+    justify-content:space-between;
+    font-size:10.5px;
+    letter-spacing:.1em;
+    text-transform:uppercase;
+    color:var(--muted);
+    margin-top:10px;
+    padding:0 2px;
+  }
+
+  /* ---------- Splits ledger ---------- */
+  .ledger{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    margin-bottom:16px;
+    overflow:hidden;
+  }
+  .ledger-head{
+    display:grid;
+    grid-template-columns: 34px 1fr 1fr;
+    padding:8px 14px;
+    font-size:10px;
+    letter-spacing:.12em;
+    text-transform:uppercase;
+    color:var(--muted);
+    border-bottom:1px solid var(--line);
+  }
+  .ledger-body{
+    max-height:180px;
+    overflow-y:auto;
+  }
+  .ledger-row{
+    display:grid;
+    grid-template-columns: 34px 1fr 1fr;
+    padding:7px 14px;
+    font-size:14px;
+    border-bottom:1px solid rgba(47,50,31,.6);
+  }
+  .ledger-row:last-child{border-bottom:none;}
+  .ledger-row .n{ color:var(--brass); }
+  .ledger-empty{
+    padding:16px 14px;
+    font-size:12px;
+    color:var(--muted);
+    text-align:center;
+    letter-spacing:.04em;
+  }
+
+  /* ---------- Controls ---------- */
+  .controls{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:22px;
+    margin:6px 0 20px;
+  }
+  .buzzer{
+    width:110px; height:110px;
+    border-radius:50%;
+    border:none;
+    cursor:pointer;
+    position:relative;
+    background:
+      radial-gradient(circle at 34% 30%, var(--red-bright), var(--red) 55%, #7a2c20 100%);
+    box-shadow:
+      0 0 0 5px var(--brass),
+      0 0 0 7px #0006,
+      0 8px 18px rgba(0,0,0,.55),
+      inset 0 3px 6px rgba(255,255,255,.25),
+      inset 0 -8px 14px rgba(0,0,0,.35);
+    color:#fff2ea;
+    font-family:var(--cond);
+    font-stretch:condensed;
+    font-weight:800;
+    font-size:15px;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    transition:transform .06s ease;
+  }
+  .buzzer:active{ transform:scale(.96); }
+  .buzzer.stop{
+    background: radial-gradient(circle at 34% 30%, #4a4436, #2c2818 55%, #1b1810 100%);
+    box-shadow:
+      0 0 0 5px var(--brass),
+      0 0 0 7px #0006,
+      0 8px 18px rgba(0,0,0,.55),
+      inset 0 3px 6px rgba(255,255,255,.12),
+      inset 0 -8px 14px rgba(0,0,0,.4);
+  }
+  .side-btn{
+    width:46px; height:46px;
+    border-radius:50%;
+    border:1px solid var(--line);
+    background:var(--panel);
+    color:var(--muted);
+    cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    font-size:18px;
+    transition:color .15s, border-color .15s;
+  }
+  .side-btn:hover{ color:var(--brass-bright); border-color:var(--brass); }
+  .side-btn:active{ transform:scale(.95); }
+
+  /* ---------- Drawers ---------- */
+  .drawer{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    margin-bottom:14px;
+    padding:14px 16px 16px;
+    display:none;
+  }
+  .drawer.open{ display:block; }
+  .drawer h2{
+    font-family:var(--cond);
+    font-stretch:condensed;
+    text-transform:uppercase;
+    letter-spacing:.1em;
+    font-size:13px;
+    color:var(--brass-bright);
+    margin:0 0 12px;
+  }
+  .field{ margin-bottom:14px; }
+  .field:last-child{ margin-bottom:0; }
+  .field-label{
+    display:flex; justify-content:space-between;
+    font-size:11px; letter-spacing:.06em; text-transform:uppercase;
+    color:var(--muted); margin-bottom:6px;
+  }
+  .field-label span.val{ color:var(--ink); }
+  input[type=range]{
+    -webkit-appearance:none; appearance:none;
+    width:100%; height:4px;
+    background:var(--line); border-radius:2px; outline:none;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; width:16px; height:16px; border-radius:50%;
+    background:var(--brass-bright); cursor:pointer; border:2px solid var(--bezel);
+  }
+  input[type=range]::-moz-range-thumb{
+    width:16px; height:16px; border-radius:50%;
+    background:var(--brass-bright); cursor:pointer; border:2px solid var(--bezel);
+  }
+  .toggle-row{ display:flex; align-items:center; justify-content:space-between; }
+  .switch{
+    width:38px; height:22px; border-radius:11px;
+    background:var(--line); position:relative; cursor:pointer; flex:none;
+    border:1px solid #000a;
+  }
+  .switch::after{
+    content:""; position:absolute; top:2px; left:2px;
+    width:16px; height:16px; border-radius:50%;
+    background:var(--muted); transition:left .15s, background .15s;
+  }
+  .switch.on{ background:#3e4a2c; }
+  .switch.on::after{ left:18px; background:var(--lcd); }
+  .mic-state{ font-size:11px; color:var(--muted); margin-top:8px; }
+  .mic-state.ok{ color:#7fae5f; }
+  .mic-state.bad{ color:var(--red-bright); }
+
+  /* ---------- Spectrum / detection panel ---------- */
+  .spectrum-wrap{
+    background:var(--bezel);
+    border:1px solid #000;
+    border-radius:8px;
+    padding:8px 8px 6px;
+    margin-bottom:4px;
+  }
+  #spectrumCanvas{
+    width:100%;
+    height:150px;
+    display:block;
+    border-radius:4px;
+    cursor:crosshair;
+    touch-action:none;
+  }
+  .spectrum-readout{
+    display:flex;
+    justify-content:space-between;
+    font-size:10px;
+    letter-spacing:.05em;
+    color:var(--muted);
+    margin-top:6px;
+    padding:0 2px;
+  }
+  .spectrum-readout .peak{ color:var(--ink); transition:color .1s; }
+  .spectrum-readout .peak.trig{ color:var(--red-bright); }
+  .spectrum-hint{
+    font-size:10px;
+    color:#5c5a4d;
+    letter-spacing:.03em;
+    margin:6px 2px 14px;
+    line-height:1.5;
+  }
+  .hz-row{ display:flex; gap:10px; }
+  .hz-row .field{ flex:1; }
+
+  .history-row{
+    display:flex; justify-content:space-between; align-items:center;
+    padding:10px 0; border-bottom:1px solid rgba(47,50,31,.6);
+    font-size:12.5px;
+  }
+  .history-row:last-child{ border-bottom:none; }
+  .history-row .meta{ color:var(--muted); }
+  .clear-btn{
+    background:none; border:1px solid var(--line); color:var(--muted);
+    font-family:var(--mono); font-size:11px; letter-spacing:.06em;
+    padding:7px 10px; border-radius:6px; cursor:pointer; margin-top:10px;
+  }
+  .clear-btn:hover{ color:var(--red-bright); border-color:var(--red-bright); }
+
+  .foot{
+    text-align:center; font-size:10px; letter-spacing:.08em;
+    color:#5c5a4d; margin-top:6px;
+  }
+
+  ::-webkit-scrollbar{ width:6px; }
+  ::-webkit-scrollbar-thumb{ background:var(--line); border-radius:3px; }
+
+  @media (prefers-reduced-motion: reduce){
+    .status-dot.live{ animation:none; }
+    .buzzer{ transition:none; }
+  }
+</style>
+</head>
+<body>
+<div class="rig">
+
+  <div class="plate">
+    <h1>Range Timer</h1>
+    <div class="serial">MK1 · NO SIGNAL REQUIRED<br>SELF-CONTAINED</div>
+  </div>
+
+  <div class="status-row">
+    <div class="status-dot" id="statusDot"></div>
+    <div class="status-text" id="statusText">Stand by</div>
+  </div>
+
+  <div class="readout">
+    <div class="digits" id="digits">00.00</div>
+    <div class="subline">
+      <span id="subLeft">Shots: 0</span>
+      <span id="subRight">Delay --</span>
+    </div>
+  </div>
+
+  <div class="ledger">
+    <div class="ledger-head"><span>#</span><span>Split</span><span>Total</span></div>
+    <div class="ledger-body" id="ledgerBody">
+      <div class="ledger-empty">No shots recorded yet</div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="side-btn" id="historyBtn" title="History" aria-label="History">☰</button>
+    <button class="buzzer" id="buzzerBtn">START</button>
+    <button class="side-btn" id="settingsBtn" title="Settings" aria-label="Settings">⚙</button>
+  </div>
+
+  <div class="drawer" id="settingsDrawer">
+    <h2>Settings</h2>
+
+    <div class="field">
+      <div class="field-label"><span>Random delay</span><span class="val" id="delayVal">1.0 – 4.0 s</span></div>
+      <input type="range" id="delayMin" min="0" max="8" step="0.1" value="1.0">
+      <input type="range" id="delayMax" min="0" max="8" step="0.1" value="4.0" style="margin-top:6px;">
+    </div>
+
+    <div class="field toggle-row">
+      <div class="field-label" style="margin-bottom:0;">Par time</div>
+      <div class="switch" id="parSwitch"></div>
+    </div>
+    <div class="field" id="parField" style="display:none;">
+      <div class="field-label"><span>Par time</span><span class="val" id="parVal">3.0 s</span></div>
+      <input type="range" id="parTime" min="0.5" max="15" step="0.1" value="3.0">
+    </div>
+
+    <div class="field toggle-row">
+      <div class="field-label" style="margin-bottom:0;">Auto-stop after silence</div>
+      <div class="switch on" id="autoStopSwitch"></div>
+    </div>
+
+    <div class="field toggle-row">
+      <div class="field-label" style="margin-bottom:0;">Manual mode (tap/space to log shots)</div>
+      <div class="switch" id="manualSwitch"></div>
+    </div>
+
+    <hr style="border:none; border-top:1px solid var(--line); margin:16px 0;">
+
+    <h2>Shot detection — spectrum</h2>
+    <div class="spectrum-wrap">
+      <canvas id="spectrumCanvas"></canvas>
+    </div>
+    <div class="spectrum-readout">
+      <span>Peak in band: <span class="peak" id="peakReadout">-- dB</span></span>
+      <span id="triggerReadout">—</span>
+    </div>
+    <div class="spectrum-hint">
+      Drag the red line to set the trigger level (dB). Drag the two amber handles to set the frequency band ("tone") a shot must fall in. Make some noise near the mic to calibrate — the readout flashes when a peak crosses the threshold.
+    </div>
+
+    <div class="field">
+      <div class="field-label"><span>Trigger threshold</span><span class="val" id="thresholdVal">-30 dB</span></div>
+      <input type="range" id="thresholdSlider" min="-100" max="-10" step="1" value="-30">
+    </div>
+
+    <div class="hz-row">
+      <div class="field">
+        <div class="field-label"><span>Band low</span><span class="val" id="freqMinVal">1000 Hz</span></div>
+        <input type="range" id="freqMinSlider" min="60" max="12000" step="10" value="1000">
+      </div>
+      <div class="field">
+        <div class="field-label"><span>Band high</span><span class="val" id="freqMaxVal">8000 Hz</span></div>
+        <input type="range" id="freqMaxSlider" min="60" max="12000" step="10" value="8000">
+      </div>
+    </div>
+
+    <div class="mic-state" id="micState">Microphone not yet requested.</div>
+  </div>
+
+  <div class="drawer" id="historyDrawer">
+    <h2>String history</h2>
+    <div id="historyList"><div class="ledger-empty">No strings saved yet</div></div>
+    <button class="clear-btn" id="clearHistoryBtn">Clear history</button>
+  </div>
+
+  <div class="foot">Runs fully offline · nothing leaves this device</div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---------- Elements ----------
+  const digitsEl = document.getElementById('digits');
+  const statusDot = document.getElementById('statusDot');
+  const statusText = document.getElementById('statusText');
+  const subLeft = document.getElementById('subLeft');
+  const subRight = document.getElementById('subRight');
+  const ledgerBody = document.getElementById('ledgerBody');
+  const buzzerBtn = document.getElementById('buzzerBtn');
+  const settingsBtn = document.getElementById('settingsBtn');
+  const historyBtn = document.getElementById('historyBtn');
+  const settingsDrawer = document.getElementById('settingsDrawer');
+  const historyDrawer = document.getElementById('historyDrawer');
+  const historyList = document.getElementById('historyList');
+  const clearHistoryBtn = document.getElementById('clearHistoryBtn');
+
+  const delayMinEl = document.getElementById('delayMin');
+  const delayMaxEl = document.getElementById('delayMax');
+  const delayVal = document.getElementById('delayVal');
+  const parSwitch = document.getElementById('parSwitch');
+  const parField = document.getElementById('parField');
+  const parTimeEl = document.getElementById('parTime');
+  const parVal = document.getElementById('parVal');
+  const autoStopSwitch = document.getElementById('autoStopSwitch');
+  const manualSwitch = document.getElementById('manualSwitch');
+  const micState = document.getElementById('micState');
+
+  const canvas = document.getElementById('spectrumCanvas');
+  const ctx2d = canvas.getContext('2d');
+  const peakReadout = document.getElementById('peakReadout');
+  const triggerReadout = document.getElementById('triggerReadout');
+  const thresholdSlider = document.getElementById('thresholdSlider');
+  const thresholdVal = document.getElementById('thresholdVal');
+  const freqMinSlider = document.getElementById('freqMinSlider');
+  const freqMaxSlider = document.getElementById('freqMaxSlider');
+  const freqMinVal = document.getElementById('freqMinVal');
+  const freqMaxVal = document.getElementById('freqMaxVal');
+
+  // ---------- State ----------
+  let phase = 'idle'; // idle -> arming -> running -> finished
+  let audioCtx = null;
+  let analyser = null;
+  let freqData = null;   // Float32Array, dB per bin
+  let micStream = null;
+  let micReady = false;
+  let micRequesting = false;
+  let manualMode = false;
+  let monitorRafId = null;
+  let beepGuardUntil = 0;
+  let lastShotAt = 0;
+  let startTime = 0;
+  let shots = [];
+  let parEnabled = false;
+  let autoStopEnabled = true;
+  let autoStopTimer = null;
+  let displayTimer = null;
+  let delayMin = 1.0, delayMax = 4.0;
+  let parTime = 3.0;
+  let lastDelayUsed = null;
+
+  // Detection (frequency-domain)
+  const DB_MIN = -100, DB_MAX = -10;
+  const FREQ_MIN_DISPLAY = 60, FREQ_MAX_DISPLAY = 12000;
+  let thresholdDb = -30;
+  let freqMin = 1000, freqMax = 8000;
+  let bandPeakDb = DB_MIN;
+  let triggerFlashUntil = 0;
+
+  let dragTarget = null; // 'threshold' | 'freqMin' | 'freqMax'
+
+  const HISTORY_KEY = 'rangeTimerHistory';
+
+  // ---------- Utility ----------
+  function fmt(ms){ return (ms/1000).toFixed(2); }
+  function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+  function setDigits(text, on){
+    digitsEl.textContent = text;
+    digitsEl.classList.toggle('on', !!on);
+  }
+  function setStatus(text, dotClass){
+    statusText.textContent = text;
+    statusDot.className = 'status-dot' + (dotClass ? ' '+dotClass : '');
+  }
+
+  // ---------- Audio ----------
+  function ensureAudioCtx(){
+    if(!audioCtx){
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if(audioCtx.state === 'suspended') audioCtx.resume();
+    return audioCtx;
+  }
+
+  function playBeep(duration=0.15, freq=1600, vol=0.5){
+    const ctx = ensureAudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'square';
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0, ctx.currentTime);
+    gain.gain.linearRampToValueAtTime(vol, ctx.currentTime + 0.008);
+    gain.gain.setValueAtTime(vol, ctx.currentTime + duration - 0.02);
+    gain.gain.linearRampToValueAtTime(0, ctx.currentTime + duration);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + duration + 0.02);
+  }
+
+  async function ensureMic(){
+    if(micReady) return true;
+    if(micRequesting) return false;
+    micRequesting = true;
+    try{
+      const ctx = ensureAudioCtx();
+      micStream = await navigator.mediaDevices.getUserMedia({audio:{
+        echoCancellation:false, noiseSuppression:false, autoGainControl:false
+      }});
+      const src = ctx.createMediaStreamSource(micStream);
+      analyser = ctx.createAnalyser();
+      analyser.fftSize = 2048;
+      analyser.smoothingTimeConstant = 0.15;
+      analyser.minDecibels = DB_MIN;
+      analyser.maxDecibels = DB_MAX;
+      freqData = new Float32Array(analyser.frequencyBinCount);
+      src.connect(analyser);
+      micReady = true;
+      micState.textContent = 'Microphone connected — frequency-domain detection active.';
+      micState.className = 'mic-state ok';
+      checkMonitorState();
+      return true;
+    }catch(err){
+      micReady = false;
+      micState.textContent = 'Microphone unavailable (' + (err.message||err.name) + '). Switch on manual mode to log shots by tapping the buzzer or pressing space.';
+      micState.className = 'mic-state bad';
+      manualMode = true;
+      manualSwitch.classList.add('on');
+      return false;
+    } finally {
+      micRequesting = false;
+    }
+  }
+
+  // ---------- Frequency <-> pixel mapping (log scale) ----------
+  function freqToX(f, w){
+    const t = Math.log(f/FREQ_MIN_DISPLAY) / Math.log(FREQ_MAX_DISPLAY/FREQ_MIN_DISPLAY);
+    return clamp(t,0,1) * w;
+  }
+  function xToFreq(x, w){
+    const t = clamp(x/w, 0, 1);
+    return FREQ_MIN_DISPLAY * Math.pow(FREQ_MAX_DISPLAY/FREQ_MIN_DISPLAY, t);
+  }
+  function dbToY(db, h){
+    const t = (db-DB_MIN)/(DB_MAX-DB_MIN);
+    return h - clamp(t,0,1)*h;
+  }
+  function yToDb(y, h){
+    const t = 1 - clamp(y/h,0,1);
+    return DB_MIN + t*(DB_MAX-DB_MIN);
+  }
+
+  function resizeCanvas(){
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = Math.max(1, Math.round(rect.width*dpr));
+    canvas.height = Math.max(1, Math.round(150*dpr));
+    ctx2d.setTransform(dpr,0,0,dpr,0,0);
+  }
+
+  function drawSpectrum(){
+    const rect = canvas.getBoundingClientRect();
+    const w = rect.width, h = 150;
+    ctx2d.clearRect(0,0,w,h);
+
+    // dB gridlines
+    ctx2d.strokeStyle = 'rgba(255,255,255,0.05)';
+    ctx2d.fillStyle = '#5c5a4d';
+    ctx2d.font = '9px ui-monospace, monospace';
+    ctx2d.lineWidth = 1;
+    for(let db=DB_MAX; db>=DB_MIN; db-=20){
+      const y = dbToY(db,h);
+      ctx2d.beginPath(); ctx2d.moveTo(0,y); ctx2d.lineTo(w,y); ctx2d.stroke();
+      ctx2d.fillText(db+'', 3, y-2);
+    }
+
+    // frequency band shading
+    const xLo = freqToX(freqMin,w), xHi = freqToX(freqMax,w);
+    ctx2d.fillStyle = 'rgba(184,146,90,0.14)';
+    ctx2d.fillRect(xLo, 0, xHi-xLo, h);
+
+    // spectrum bars
+    if(freqData && analyser){
+      const sr = audioCtx.sampleRate;
+      const nyquist = sr/2;
+      const binCount = analyser.frequencyBinCount;
+      ctx2d.fillStyle = '#ffb020';
+      for(let x=0; x<w; x++){
+        const f = xToFreq(x,w);
+        const bin = clamp(Math.round(f/nyquist*binCount), 0, binCount-1);
+        const db = freqData[bin];
+        const y = dbToY(db,h);
+        const inBand = f>=freqMin && f<=freqMax;
+        ctx2d.globalAlpha = inBand ? 0.95 : 0.45;
+        ctx2d.fillRect(x, y, 1, h-y);
+      }
+      ctx2d.globalAlpha = 1;
+    }
+
+    // frequency axis labels
+    ctx2d.fillStyle = '#5c5a4d';
+    [100,200,500,1000,2000,5000,10000].forEach(f=>{
+      const x = freqToX(f,w);
+      const label = f>=1000 ? (f/1000)+'k' : f+'';
+      ctx2d.fillText(label, clamp(x-8,2,w-20), h-3);
+    });
+
+    // threshold line
+    const ty = dbToY(thresholdDb,h);
+    const flashing = performance.now() < triggerFlashUntil;
+    ctx2d.strokeStyle = flashing ? '#ff8a6e' : '#d5563d';
+    ctx2d.lineWidth = flashing ? 2.5 : 1.5;
+    ctx2d.setLineDash([4,3]);
+    ctx2d.beginPath(); ctx2d.moveTo(0,ty); ctx2d.lineTo(w,ty); ctx2d.stroke();
+    ctx2d.setLineDash([]);
+
+    // band handles
+    ctx2d.fillStyle = '#e0bb84';
+    [xLo, xHi].forEach(x=>{
+      ctx2d.fillRect(x-1.5, 0, 3, h);
+      ctx2d.beginPath();
+      ctx2d.moveTo(x-5, 0); ctx2d.lineTo(x+5,0); ctx2d.lineTo(x,8); ctx2d.closePath();
+      ctx2d.fill();
+    });
+
+    // live peak marker in band
+    if(freqData){
+      const px = clamp((freqToX(freqMin,w)+freqToX(freqMax,w))/2, 0, w);
+      ctx2d.fillStyle = flashing ? '#ff8a6e' : '#ffe6c0';
+      ctx2d.beginPath();
+      ctx2d.arc(px, dbToY(bandPeakDb,h), flashing?4:2.5, 0, Math.PI*2);
+      ctx2d.fill();
+    }
+  }
+
+  // ---------- Pointer interaction on spectrum ----------
+  function pointerToLocal(e){
+    const rect = canvas.getBoundingClientRect();
+    return { x:(e.clientX-rect.left), y:(e.clientY-rect.top), w:rect.width, h:150 };
+  }
+  canvas.addEventListener('pointerdown', (e)=>{
+    const {x,y,w,h} = pointerToLocal(e);
+    const xLo = freqToX(freqMin,w), xHi = freqToX(freqMax,w);
+    const ty = dbToY(thresholdDb,h);
+    if(Math.abs(x-xLo) < 14){ dragTarget='freqMin'; }
+    else if(Math.abs(x-xHi) < 14){ dragTarget='freqMax'; }
+    else if(Math.abs(y-ty) < 12){ dragTarget='threshold'; }
+    else { dragTarget = null; return; }
+    canvas.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+  canvas.addEventListener('pointermove', (e)=>{
+    if(!dragTarget) return;
+    const {x,y,w,h} = pointerToLocal(e);
+    if(dragTarget==='threshold'){
+      thresholdDb = Math.round(clamp(yToDb(y,h), DB_MIN, DB_MAX));
+      thresholdSlider.value = thresholdDb;
+      thresholdVal.textContent = thresholdDb+' dB';
+    } else if(dragTarget==='freqMin'){
+      freqMin = Math.round(clamp(xToFreq(x,w), FREQ_MIN_DISPLAY, freqMax-50));
+      freqMinSlider.value = freqMin;
+      freqMinVal.textContent = freqMin+' Hz';
+    } else if(dragTarget==='freqMax'){
+      freqMax = Math.round(clamp(xToFreq(x,w), freqMin+50, FREQ_MAX_DISPLAY));
+      freqMaxSlider.value = freqMax;
+      freqMaxVal.textContent = freqMax+' Hz';
+    }
+  });
+  function endDrag(e){ dragTarget=null; };
+  canvas.addEventListener('pointerup', endDrag);
+  canvas.addEventListener('pointercancel', endDrag);
+
+  thresholdSlider.addEventListener('input', ()=>{
+    thresholdDb = parseFloat(thresholdSlider.value);
+    thresholdVal.textContent = thresholdDb+' dB';
+  });
+  freqMinSlider.addEventListener('input', ()=>{
+    freqMin = Math.min(parseFloat(freqMinSlider.value), freqMax-50);
+    freqMinSlider.value = freqMin;
+    freqMinVal.textContent = freqMin+' Hz';
+  });
+  freqMaxSlider.addEventListener('input', ()=>{
+    freqMax = Math.max(parseFloat(freqMaxSlider.value), freqMin+50);
+    freqMaxSlider.value = freqMax;
+    freqMaxVal.textContent = freqMax+' Hz';
+  });
+
+  // ---------- Unified monitor loop: draws spectrum + does shot detection ----------
+  function monitorFrame(){
+    monitorRafId = null;
+    if(!analyser || !freqData){ checkMonitorState(); return; }
+    analyser.getFloatFrequencyData(freqData);
+
+    const sr = audioCtx.sampleRate, nyquist = sr/2, binCount = analyser.frequencyBinCount;
+    const loBin = clamp(Math.floor(freqMin/nyquist*binCount), 0, binCount-1);
+    const hiBin = clamp(Math.ceil(freqMax/nyquist*binCount), 0, binCount-1);
+    let peak = DB_MIN;
+    for(let i=loBin; i<=hiBin; i++){ if(freqData[i]>peak) peak = freqData[i]; }
+    bandPeakDb = peak;
+
+    const now = performance.now();
+    const crossed = peak >= thresholdDb;
+    if(crossed) triggerFlashUntil = now + 120;
+
+    if(phase==='running' && !manualMode && now>=beepGuardUntil && crossed && (now-lastShotAt)>130){
+      registerShot(now);
+    }
+
+    if(settingsDrawer.classList.contains('open')){
+      peakReadout.textContent = bandPeakDb.toFixed(0)+' dB';
+      peakReadout.classList.toggle('trig', now < triggerFlashUntil);
+      triggerReadout.textContent = (now < triggerFlashUntil) ? 'TRIGGERED' : (phase==='running' ? 'armed' : 'monitoring');
+      drawSpectrum();
+    }
+
+    checkMonitorState();
+  }
+
+  function checkMonitorState(){
+    const shouldRun = !!analyser && (phase==='running' || settingsDrawer.classList.contains('open'));
+    if(shouldRun && monitorRafId===null){
+      monitorRafId = requestAnimationFrame(monitorFrame);
+    } else if(shouldRun && monitorRafId!==null){
+      // already scheduled
+    } else if(!shouldRun && monitorRafId!==null){
+      cancelAnimationFrame(monitorRafId);
+      monitorRafId = null;
+    }
+  }
+
+  // ---------- Timer flow ----------
+  function updateSubline(){
+    subLeft.textContent = 'Shots: ' + shots.length;
+    subRight.textContent = lastDelayUsed!=null ? ('Delay ' + lastDelayUsed.toFixed(2) + 's') : 'Delay --';
+  }
+
+  function renderLedger(){
+    if(shots.length===0){
+      ledgerBody.innerHTML = '<div class="ledger-empty">No shots recorded yet</div>';
+      return;
+    }
+    let html = '';
+    let prev = 0;
+    shots.forEach((s, i)=>{
+      const split = s.t - prev;
+      html += '<div class="ledger-row"><span class="n">'+(i+1)+'</span><span>'+fmt(split)+'</span><span>'+fmt(s.t)+'</span></div>';
+      prev = s.t;
+    });
+    ledgerBody.innerHTML = html;
+    ledgerBody.scrollTop = ledgerBody.scrollHeight;
+  }
+
+  function registerShot(nowPerf){
+    lastShotAt = nowPerf;
+    const t = nowPerf - startTime;
+    shots.push({t});
+    renderLedger();
+    updateSubline();
+    if(autoStopEnabled){
+      clearTimeout(autoStopTimer);
+      autoStopTimer = setTimeout(()=>{ if(phase==='running') finishRun(); }, 2500);
+    }
+  }
+
+  function startDisplayLoop(){
+    clearInterval(displayTimer);
+    displayTimer = setInterval(()=>{
+      if(phase!=='running') return;
+      const elapsed = performance.now() - startTime;
+      setDigits(fmt(elapsed), true);
+    }, 30);
+  }
+
+  async function beginRun(){
+    if(phase!=='idle' && phase!=='finished') return;
+    shots = [];
+    renderLedger();
+    setDigits('00.00', false);
+    updateSubline();
+    buzzerBtn.textContent = 'WAIT';
+    buzzerBtn.classList.add('stop');
+
+    if(!manualMode) await ensureMic();
+
+    phase = 'arming';
+    setStatus('Get ready…', '');
+    const delay = delayMin + Math.random()*Math.max(0, (delayMax-delayMin));
+    lastDelayUsed = delay;
+    updateSubline();
+
+    setTimeout(()=>{
+      if(phase!=='arming') return;
+      ensureAudioCtx();
+      playBeep(0.16, 1700, 0.55);
+      beepGuardUntil = performance.now() + 220;
+      startTime = performance.now();
+      phase = 'running';
+      lastShotAt = 0;
+      buzzerBtn.textContent = 'STOP';
+      setStatus(manualMode ? 'GO — tap or space to log shots' : 'GO — listening for shots', 'live');
+      startDisplayLoop();
+      checkMonitorState();
+
+      if(parEnabled){
+        setTimeout(()=>{
+          if(phase==='running'){ playBeep(0.1, 1200, 0.4); }
+        }, parTime*1000);
+      }
+      if(autoStopEnabled){
+        clearTimeout(autoStopTimer);
+        autoStopTimer = setTimeout(()=>{ if(phase==='running') finishRun(); }, 6000);
+      }
+    }, delay*1000);
+  }
+
+  function finishRun(){
+    if(phase!=='running') return;
+    phase = 'finished';
+    clearInterval(displayTimer);
+    clearTimeout(autoStopTimer);
+    const total = shots.length ? shots[shots.length-1].t : (performance.now()-startTime);
+    setDigits(fmt(total), true);
+    setStatus('String complete', 'ready');
+    buzzerBtn.textContent = 'START';
+    buzzerBtn.classList.remove('stop');
+    saveHistory(total);
+    checkMonitorState();
+  }
+
+  function resetAll(){
+    phase = 'idle';
+    clearInterval(displayTimer);
+    clearTimeout(autoStopTimer);
+    shots = [];
+    lastDelayUsed = null;
+    setDigits('00.00', false);
+    setStatus('Stand by', '');
+    updateSubline();
+    renderLedger();
+    buzzerBtn.textContent = 'START';
+    buzzerBtn.classList.remove('stop');
+    checkMonitorState();
+  }
+
+  function handleBuzzerPress(){
+    if(phase==='idle' || phase==='finished'){
+      beginRun();
+    } else if(phase==='arming'){
+      phase='idle';
+      buzzerBtn.textContent='START';
+      buzzerBtn.classList.remove('stop');
+      setStatus('Cancelled', '');
+    } else if(phase==='running'){
+      if(manualMode){
+        registerShot(performance.now());
+      } else {
+        finishRun();
+      }
+    }
+  }
+
+  buzzerBtn.addEventListener('click', handleBuzzerPress);
+
+  document.addEventListener('keydown', (e)=>{
+    if(e.code==='Space'){
+      e.preventDefault();
+      handleBuzzerPress();
+    } else if(e.key==='r' || e.key==='R'){
+      if(phase!=='running' && phase!=='arming') resetAll();
+    }
+  });
+
+  // ---------- Settings wiring ----------
+  function updateDelayLabel(){
+    delayMin = parseFloat(delayMinEl.value);
+    delayMax = parseFloat(delayMaxEl.value);
+    if(delayMax < delayMin){ delayMax = delayMin; delayMaxEl.value = delayMax; }
+    delayVal.textContent = delayMin.toFixed(1)+' – '+delayMax.toFixed(1)+' s';
+  }
+  delayMinEl.addEventListener('input', updateDelayLabel);
+  delayMaxEl.addEventListener('input', updateDelayLabel);
+
+  parSwitch.addEventListener('click', ()=>{
+    parEnabled = !parEnabled;
+    parSwitch.classList.toggle('on', parEnabled);
+    parField.style.display = parEnabled ? 'block' : 'none';
+  });
+  parTimeEl.addEventListener('input', ()=>{
+    parTime = parseFloat(parTimeEl.value);
+    parVal.textContent = parTime.toFixed(1)+' s';
+  });
+
+  autoStopSwitch.addEventListener('click', ()=>{
+    autoStopEnabled = !autoStopEnabled;
+    autoStopSwitch.classList.toggle('on', autoStopEnabled);
+  });
+
+  manualSwitch.addEventListener('click', ()=>{
+    manualMode = !manualMode;
+    manualSwitch.classList.toggle('on', manualMode);
+  });
+
+  settingsBtn.addEventListener('click', ()=>{
+    const opening = !settingsDrawer.classList.contains('open');
+    settingsDrawer.classList.toggle('open', opening);
+    historyDrawer.classList.remove('open');
+    if(opening){
+      resizeCanvas();
+      if(!manualMode) ensureMic();
+      checkMonitorState();
+    } else {
+      checkMonitorState();
+    }
+  });
+  historyBtn.addEventListener('click', ()=>{
+    historyDrawer.classList.toggle('open');
+    settingsDrawer.classList.remove('open');
+    checkMonitorState();
+    renderHistory();
+  });
+
+  window.addEventListener('resize', ()=>{ if(settingsDrawer.classList.contains('open')) resizeCanvas(); });
+
+  // ---------- History ----------
+  function loadHistory(){
+    try{ return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; }
+    catch(e){ return []; }
+  }
+  function saveHistory(total){
+    const list = loadHistory();
+    list.unshift({
+      date: new Date().toISOString(),
+      total: total,
+      count: shots.length,
+      delay: lastDelayUsed,
+      shots: shots.map(s=>s.t)
+    });
+    while(list.length>25) list.pop();
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(list));
+  }
+  function renderHistory(){
+    const list = loadHistory();
+    if(list.length===0){
+      historyList.innerHTML = '<div class="ledger-empty">No strings saved yet</div>';
+      return;
+    }
+    historyList.innerHTML = list.map(item=>{
+      const d = new Date(item.date);
+      const dateStr = d.toLocaleDateString(undefined,{month:'short',day:'numeric'}) + ' ' + d.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'});
+      return '<div class="history-row"><span>'+dateStr+'</span><span class="meta">'+item.count+' shots · '+fmt(item.total)+'s</span></div>';
+    }).join('');
+  }
+  clearHistoryBtn.addEventListener('click', ()=>{
+    localStorage.removeItem(HISTORY_KEY);
+    renderHistory();
+  });
+
+  // ---------- Service worker for offline installability ----------
+  if('serviceWorker' in navigator){
+    window.addEventListener('load', ()=>{
+      navigator.serviceWorker.register('sw.js').catch(()=>{});
+    });
+  }
+
+  // init
+  updateDelayLabel();
+  renderLedger();
+  updateSubline();
+  resizeCanvas();
+})();
+</script>
+</body>
+</html>
