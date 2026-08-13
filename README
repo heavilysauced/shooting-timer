@@ -1,12 +1,14 @@
-# Range Timer
+
 https://heavilysauced.github.io/shooting-timer/
+# Range Timer
 
 A self-contained, offline-capable shot timer for practical/competitive shooting practice. No backend, no external libraries, no analytics — everything runs in the browser.
 
 ## Features
 
 - **Randomized start delay** (adjustable min/max) before the start beep, so you can't anticipate the go signal
-- **Automatic shot detection** via the device microphone (Web Audio API) — no need to tap anything mid-string
+- **Frequency-domain shot detection** — analyzes the live mic input as an FFT spectrum (dB per frequency bin) rather than raw loudness, so you can tune detection around a shot's actual acoustic signature and ignore louder-but-different noise (range commands, wind, footsteps, gear clatter)
+- **Interactive spectrum view** in Settings: a live dB-vs-frequency display where you drag a threshold line (dB level) and two band handles (the "tone," i.e. frequency range) directly on the graph — or use the matching sliders. A peak readout flashes when the band crosses your threshold, so you can calibrate by making test noise before ever pressing Start
 - **Manual mode** fallback if you'd rather log shots by tapping the buzzer or pressing spacebar (also used automatically if microphone access is denied)
 - **Split-time ledger** showing each shot's split and cumulative time
 - **Par time** — optional second beep at a target time
@@ -29,15 +31,17 @@ Just open `index.html` in any modern browser (Chrome, Safari, Firefox, Edge). Mi
 
 ## Using it at the range
 
-1. Tap **Settings (⚙)** to set your delay range, mic sensitivity, and optional par time.
-2. Tap **START**. The screen will say "Get ready…" during the random delay, then you'll hear the beep.
-3. Fire your string — shots are detected automatically and logged with split times. If mic detection is unreliable (windy conditions, echoey indoor range), turn on **Manual mode** and tap the buzzer (or press spacebar) each time you fire instead.
-4. Tap **STOP** (or wait for auto-stop after a few seconds of silence) to end the string.
-5. Review splits in the ledger, or check **History (☰)** for past strings.
+1. Tap **Settings (⚙)** — this also requests microphone access and opens the live spectrum view.
+2. Calibrate detection: make a few test noises (claps work reasonably well as a stand-in) and watch the spectrum. Drag the **red dashed line** up/down to set the dB trigger level just above the room's normal noise floor. Drag the two **amber handles** left/right to bracket the frequency range where the loudest, most consistent energy shows up for your gun/ammo/environment — this is the "tone" gate, and narrowing it helps the timer ignore lower-frequency thuds (steel targets, footsteps) or higher-frequency chatter that isn't the shot itself. The peak readout flashes red when your band crosses the threshold, confirming it would trigger.
+3. Set your delay range and optional par time, then close Settings.
+4. Tap **START**. The screen will say "Get ready…" during the random delay, then you'll hear the beep.
+5. Fire your string — shots are detected automatically and logged with split times. If detection is unreliable (heavy wind, echoey indoor bay, suppressed host), turn on **Manual mode** and tap the buzzer (or press spacebar) each time you fire instead.
+6. Tap **STOP** (or wait for auto-stop after a few seconds of silence) to end the string.
+7. Review splits in the ledger, or check **History (☰)** for past strings.
 
-### Tuning mic sensitivity
+### Why frequency-domain detection
 
-If it's missing shots, increase sensitivity. If it's picking up ambient range noise or your own beep as a "shot," decrease sensitivity — the app already ignores audio during the beep itself and requires ~130ms between detections to avoid double-counting a single shot's report.
+A simple loudness/peak detector can't tell a gunshot from a car door or a steel plate ringing — they can all be loud. This app runs the mic through an FFT (`AnalyserNode.getFloatFrequencyData`) and only looks for energy, above your dB threshold, inside the frequency band you selected. Muzzle report tends to concentrate energy broadly but often with a strong presence a couple kHz up; picking a band that captures your specific gun/ammo while excluding the noise floor of your range is usually more reliable than a single volume threshold. The app also ignores audio during the ~220ms right after the start beep (so it can't hear itself) and enforces a ~130ms minimum gap between detections (so a single shot's decay isn't counted twice).
 
 ## Why it works offline
 
@@ -48,4 +52,5 @@ The entire app is one HTML file with inline CSS/JS — there are no CDN fonts, i
 - `index.html` — the app
 - `manifest.json` — PWA metadata (name, icon, theme color) for "Add to Home Screen"
 - `sw.js` — service worker that caches the app for offline use
+- `icon.svg` — app icon
 - `icon.svg` — app icon
