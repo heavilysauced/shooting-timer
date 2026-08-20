@@ -509,6 +509,7 @@
     <span><i style="background:#e0bb84;"></i>Band edges (Hz)</span>
     <span><i style="background:#cfd8e6;"></i>Pitch cursor</span>
     <span><i style="background:#6b6650;"></i>Peak hold</span>
+    <span><i style="background:#8a4436;"></i>Re-arm level</span>
   </div>
   <div class="spectrum-readout">
     <span>Band peak: <span class="peak" id="peakReadout">-- dB</span></span>
@@ -516,7 +517,7 @@
     <span id="triggerReadout">—</span>
   </div>
   <div class="spectrum-hint">
-    Drag the red line to set the trigger level. Drag the two amber handles to set the frequency band a shot must fall in. Drag the pale vertical line to inspect a specific pitch. The faint grey trace behind the live spectrum holds each frequency's recent peak so you can see where the loudest energy has been landing.
+    Drag the red line to set the trigger level. Drag the two amber handles to set the frequency band a shot must fall in. Drag the pale vertical line to inspect a specific pitch. The faint grey trace behind the live spectrum holds each frequency's recent peak. The fainter dashed line below the trigger is the re-arm level — after a shot fires, the band must decay back below it (or "Min gap" must elapse) before the next shot can trigger, which is what stops a single shot's echo or decay tail from being counted twice.
   </div>
 
   <div class="field">
@@ -538,6 +539,16 @@
   <div class="field">
     <div class="field-label"><span>Pitch cursor</span><span class="val" id="cursorSliderVal">3000 Hz</span></div>
     <input type="range" id="cursorSlider" min="60" max="12000" step="10" value="3000">
+  </div>
+
+  <div class="field">
+    <div class="field-label"><span>Re-arm margin (double-shot guard)</span><span class="val" id="rearmVal">6 dB</span></div>
+    <input type="range" id="rearmSlider" min="0" max="20" step="1" value="6">
+  </div>
+
+  <div class="field">
+    <div class="field-label"><span>Min gap between shots</span><span class="val" id="minGapVal">100 ms</span></div>
+    <input type="range" id="minGapSlider" min="50" max="400" step="10" value="100">
   </div>
 
   <button class="clear-btn" id="resetPeakHoldBtn">Reset peak hold</button>
@@ -597,6 +608,10 @@
   const freqMaxVal = document.getElementById('freqMaxVal');
   const cursorSlider = document.getElementById('cursorSlider');
   const cursorSliderVal = document.getElementById('cursorSliderVal');
+  const rearmSlider = document.getElementById('rearmSlider');
+  const rearmVal = document.getElementById('rearmVal');
+  const minGapSlider = document.getElementById('minGapSlider');
+  const minGapVal = document.getElementById('minGapVal');
 
   // ---------- State ----------
   let phase = 'idle'; // idle -> arming -> running -> finished
@@ -632,6 +647,13 @@
   let bandPeakDb = DB_MIN;
   let triggerFlashUntil = 0;
   let peakHold = null, peakHoldTime = null;
+
+  // Double-detection guard: after a shot fires, the band must decay back
+  // below (threshold - rearmMarginDb), or minGapMs must elapse, before the
+  // next crossing is allowed to register as a new shot.
+  let rearmMarginDb = 6;
+  let minGapMs = 100;
+  let armed = true;
 
   let dragTarget = null; // 'threshold' | 'freqMin' | 'freqMax' | 'cursor'
 
@@ -816,6 +838,14 @@
       ctx2d.fillText(label, clamp(x-8,2,w-20), h-3);
     });
 
+    // re-arm level (dimmer, below threshold) — drawn first so threshold sits on top
+    const ry = dbToY(thresholdDb - rearmMarginDb, h);
+    ctx2d.strokeStyle = armed ? 'rgba(138,68,54,0.45)' : 'rgba(213,86,61,0.85)';
+    ctx2d.lineWidth = 1;
+    ctx2d.setLineDash([2,3]);
+    ctx2d.beginPath(); ctx2d.moveTo(0,ry); ctx2d.lineTo(w,ry); ctx2d.stroke();
+    ctx2d.setLineDash([]);
+
     // threshold line
     const ty = dbToY(thresholdDb,h);
     const flashing = now < triggerFlashUntil;
@@ -914,6 +944,14 @@
     cursorFreq = parseFloat(cursorSlider.value);
     cursorSliderVal.textContent = cursorFreq+' Hz';
   });
+  rearmSlider.addEventListener('input', ()=>{
+    rearmMarginDb = parseFloat(rearmSlider.value);
+    rearmVal.textContent = rearmMarginDb+' dB';
+  });
+  minGapSlider.addEventListener('input', ()=>{
+    minGapMs = parseFloat(minGapSlider.value);
+    minGapVal.textContent = minGapMs+' ms';
+  });
   resetPeakHoldBtn.addEventListener('click', ()=>{
     if(peakHold){ peakHold.fill(DB_MIN); peakHoldTime.fill(0); }
   });
@@ -935,8 +973,22 @@
     const crossed = peak >= thresholdDb;
     if(crossed) triggerFlashUntil = now + 120;
 
-    if(phase==='running' && !manualMode && now>=beepGuardUntil && crossed && (now-lastShotAt)>130){
-      registerShot(now);
+    if(phase==='running' && !manualMode && now>=beepGuardUntil){
+      if(armed){
+        if(crossed && (now-lastShotAt) > minGapMs){
+          registerShot(now);
+          armed = false;
+        }
+      } else {
+        // Require the band to decay back below (threshold - margin) before
+        // it can fire again — this is what rejects a single shot's echo or
+        // ringing decay tail. A hard time cap prevents getting stuck if the
+        // band never fully quiets down.
+        const resetLevel = thresholdDb - rearmMarginDb;
+        if(peak <= resetLevel || (now - lastShotAt) > Math.max(minGapMs*3, 400)){
+          armed = true;
+        }
+      }
     }
 
     if(spectrumOpen){
@@ -945,7 +997,9 @@
       peakReadout.classList.toggle('trig', now < triggerFlashUntil);
       cursorFreqReadout.textContent = cursorFreq+' Hz';
       cursorDbReadout.textContent = freqData[cursorBin].toFixed(0)+' dB';
-      triggerReadout.textContent = (now < triggerFlashUntil) ? 'TRIGGERED' : (phase==='running' ? 'armed' : 'monitoring');
+      let stateLabel = 'monitoring';
+      if(phase==='running'){ stateLabel = armed ? 'armed' : 'resetting…'; }
+      triggerReadout.textContent = (now < triggerFlashUntil) ? 'TRIGGERED' : stateLabel;
       drawSpectrum();
     }
 
@@ -1050,6 +1104,7 @@
       startTime = performance.now();
       phase = 'running';
       lastShotAt = 0;
+      armed = true;
       buzzerBtn.textContent = 'STOP';
       setStatus(manualMode ? 'GO — tap or space to log shots' : 'GO — listening for shots', 'live');
       startDisplayLoop();
